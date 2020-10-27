@@ -1,0 +1,26 @@
+{
+    "development": {
+        "username": "postgres",
+        "password": "postgres",
+        "database": "onlinecoursedb",
+        "host": "localhost",
+        "dialect": "postgres",
+        "operatorsAliases": false
+    },
+    "test": {
+        "username": "postgres",
+        "password": "postgres",
+        "database": "onlinecoursedb",
+        "host": "127.0.0.1",
+        "dialect": "postgres",
+        "operatorsAliases": false
+    },
+    "production": {
+        "username": "izvccfoubtaetq",
+        "password": "49b2528983eb191c01f1a68d1a18615aafa12bed389fe7a5ff35f9a74ae2e163",
+        "database": "dbcbkgjhal0pm3",
+        "host": "ec2-52-72-65-76.compute-1.amazonaws.com",
+        "dialect": "postgres",
+        "operatorsAliases": false
+    }
+}
