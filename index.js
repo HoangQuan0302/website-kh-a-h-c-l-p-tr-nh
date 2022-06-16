@@ -83,6 +83,7 @@ app.post('/pay', (req, res) => {
           "description": "Hat for the best team ever"
       }]
   };
+  
   paypal.payment.create(create_payment_json, function (error, payment) {
     if (error) {
         throw error;

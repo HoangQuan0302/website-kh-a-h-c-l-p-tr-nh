@@ -18,6 +18,19 @@ router.get('/vnpay', (req, res) => {
     
 })
 
+router.get('/momo',(req, res)=>{
+    var dateFormat=require('dateformat');
+    var date=new Date();
+    var desc = 'Thanh toan don hang thoi gian: ' + dateFormat(date, 'HH:mm:ss dd-mm-yyyy');
+    let totalPrice = req.session.cart.totalPrice;
+    let CourseId=req.session.cart.courseID
+    res.render('momo',{
+        description:desc,
+        totalPrice: totalPrice,
+        courseId:CourseId
+    })
+})
+
 router.get('/', (req, res) => {
     res.render('phuongthucthanhtoan')
 })
@@ -214,5 +227,106 @@ router.get('/test', (req, res, next) => {
     }
     res.send(length);
 });
+
+const MoMo = require('../config/payment');
+const crypto = require('crypto');
+const https = require('https');
+router.post('/momo', async (request, response) => {
+    // if (!request.isAuthenticated()){
+    //     response.redirect('/login/');
+    //     return; 
+    // }
+    // Tạo mã requestId
+    const requestId = 'REQ' + getRndInteger(100,1000);
+    // Số tiền giao dịch
+    const amount = request.body.amount;
+    console.log(amount);
+    // tạo mã đơn hàng orderId
+    
+    const orderId = 'OR' + request.params.id + getRndInteger(100,1000);
+    const orderInfo = `${request.session.user.userID},${request.params.courseId}`;
+    var rawSignature = "partnerCode=" + MoMo.partnerCode + "&accessKey=" + MoMo.accessKey + "&requestId=" + requestId + "&amount=" + amount + "&orderId=" + orderId + "&orderInfo=" + orderInfo + "&returnUrl=" + MoMo.returnUrl + "&notifyUrl=" + MoMo.notifyurl + "&extraData=" + MoMo.extraData;
+    var signature = crypto.createHmac('sha256', MoMo.serectkey)
+        .update(rawSignature)
+        .digest('hex');
+    
+    var body = JSON.stringify({
+        partnerCode: MoMo.partnerCode,
+        accessKey: MoMo.accessKey,
+        requestId: requestId,
+        amount: amount,
+        orderId: orderId,
+        orderInfo: orderInfo,
+        returnUrl: MoMo.returnUrl,
+        notifyUrl: MoMo.notifyurl,
+        extraData: MoMo.extraData,
+        requestType: MoMo.requestType,
+        signature: signature,
+    })
+    console.log(body);
+    var options = {
+        hostname: 'test-payment.momo.vn',
+        port: 443,
+        path: '/gw_payment/transactionProcessor',
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(body)
+        }
+    };
+    console.log(options);
+    var req = await https.request(options, (res) => {
+        res.setEncoding('utf8');
+        res.on('data', (body) => {
+            response.redirect(JSON.parse(body).payUrl);
+        });
+        res.on('end', () => {
+            console.log('No more data in response.');
+        });
+    });
+    req.write(body);
+    req.end();
+})
+
+function getRndInteger(min, max) {
+    return Math.floor(Math.random() * (max - min)) + min;
+}
+
+router.get('/comfirm', async (req, res) => {
+    db._connect();
+    var data = Object.assign([], req.query);
+    data.isSuccess = false;
+    if(req.query.errorCode == '0'){
+        data.isSuccess = true;
+        console.log(req.query)
+        try {
+            const exDataMoMo = req.query.orderInfo.split(',');
+            const belongTo = exDataMoMo[0] || null;
+            const courseId = exDataMoMo[1] || null;
+            if(courseId == 'cart'){
+                const cartBeforeDelete = await ChucNang.findOne({belongTo});
+                await ChucNang.findOneAndUpdate({belongTo}, { $push: { KhoaHocDaMua: cartBeforeDelete.GioHang},GioHang: [] })
+                db._disconnect();
+                return res.render('comfirm', {data: data});
+            }
+            const result = await KhoaHoc.findById(courseId).lean();
+            console.log(result)
+            if(result){
+                const checkBelongUser = await ChucNang.findOne({belongTo}).lean();
+                if(!checkBelongUser){
+                    let newKhoaHocDaMua = new ChucNang({belongTo, KhoaHocDaMua: [courseId]});
+                    await newKhoaHocDaMua.save();
+                }else{
+                    await ChucNang.findByIdAndUpdate(checkBelongUser._id, { $push: { KhoaHocDaMua: courseId } })
+                }
+                await ChucNang.findByIdAndUpdate(checkBelongUser._id, { $pull: { GioHang: courseId } })
+            }
+        } catch (error) {
+            console.log(error);
+        }
+    }
+    db._disconnect();
+    res.render('comfirm', {data: data});
+})
 
 module.exports = router;
